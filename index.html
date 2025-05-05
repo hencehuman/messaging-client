@@ -2,21 +2,19 @@
 <html>
 <head>
   <title>RT Messaging Bridge</title>
-  <script src="https://unpkg.com/backendless"></script>
+  <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
 </head>
 <body>
   <h2>Listening for messages...</h2>
 
   <script>
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";  // This should be the read-only Messaging key
-    const PUBLISHER_OBJECT_ID = "236E3176-6F40-BBB6-FF42-5D0E7E2F2300";  // The user you're listening to
+    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";  // Messaging Read-Only key
+    const PUBLISHER_OBJECT_ID = "236E3176-6F40-BBB6-FF42-5D0E7E2F2300";
     const CHANNEL_NAME = PUBLISHER_OBJECT_ID.substring(0, 6);
 
-    // Initialize Backendless
     Backendless.initApp(APP_ID, API_KEY);
 
-    // Subscribe to the channel
     const channel = Backendless.Messaging.subscribe(CHANNEL_NAME);
 
     channel.addMessageListener((message) => {
