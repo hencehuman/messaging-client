@@ -15,13 +15,15 @@
 
     Backendless.initApp(APP_ID, API_KEY);
 
-    const channel = Backendless.Messaging.subscribe(CHANNEL_NAME);
-
-    channel.addMessageListener((message) => {
-      console.log("📩 Message received:", message);
+    // Wait for subscription to be ready before adding listener
+    Backendless.Messaging.subscribe(CHANNEL_NAME).then(channel => {
+      console.log("✅ Subscribed to channel:", CHANNEL_NAME);
+      channel.addMessageListener((message) => {
+        console.log("📩 Message received:", message);
+      });
+    }).catch(error => {
+      console.error("❌ Subscription failed:", error);
     });
-
-    console.log("✅ Subscribed to channel:", CHANNEL_NAME);
   </script>
 </body>
 </html>
