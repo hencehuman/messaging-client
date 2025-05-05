@@ -1,44 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>RT Messaging Debug</title>
+  <title>RT Messaging Bridge</title>
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #status { color: green; margin-bottom: 10px; }
-    #messages { border: 1px solid #ccc; padding: 10px; max-height: 300px; overflow-y: auto; }
-  </style>
 </head>
 <body>
-  <h2>📡 Listening for messages...</h2>
-  <div id="status">⏳ Initializing...</div>
-  <div id="messages"><em>No messages received yet.</em></div>
+  <h2>Listening for messages...</h2>
 
   <script>
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";  // Messaging Read-Only key
+    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only Messaging Key
     const PUBLISHER_OBJECT_ID = "236E3176-6F40-BBB6-FF42-5D0E7E2F2300";
     const CHANNEL_NAME = PUBLISHER_OBJECT_ID.substring(0, 6);
 
-    const statusDiv = document.getElementById("status");
-    const messagesDiv = document.getElementById("messages");
-
+    // Initialize
     Backendless.initApp(APP_ID, API_KEY);
 
-    Backendless.Messaging.subscribe(CHANNEL_NAME).then(channel => {
-      statusDiv.textContent = "✅ Subscribed to channel: " + CHANNEL_NAME;
+    // Subscribe
+    const channel = Backendless.Messaging.subscribe(CHANNEL_NAME);
+    channel.addMessageListener((message) => {
+      const msgText = typeof message === "object" ? JSON.stringify(message) : message;
 
-      channel.addMessageListener(message => {
-        const time = new Date().toLocaleTimeString();
-        const msgText = typeof message === "object" ? JSON.stringify(message) : message;
-        const entry = document.createElement("div");
-        entry.textContent = `[${time}] 📩 ${msgText}`;
-        messagesDiv.appendChild(entry);
-      });
-    }).catch(error => {
-      statusDiv.textContent = "❌ Failed to subscribe: " + error.message;
-      statusDiv.style.color = "red";
+      console.log("📩 Message received:", msgText);
+
+      // 🔁 Send to Thunkable app (Web Bridge)
+      window.ReactNativeWebView?.postMessage(msgText);
     });
+
+    console.log("✅ Subscribed to channel:", CHANNEL_NAME);
   </script>
 </body>
 </html>
