@@ -15,15 +15,19 @@
 
     Backendless.initApp(APP_ID, API_KEY);
 
-    // Wait for subscription to be ready before adding listener
-    Backendless.Messaging.subscribe(CHANNEL_NAME).then(channel => {
+    try {
+      const channel = Backendless.Messaging.subscribe(CHANNEL_NAME);
       console.log("✅ Subscribed to channel:", CHANNEL_NAME);
-      channel.addMessageListener((message) => {
-        console.log("📩 Message received:", message);
-      });
-    }).catch(error => {
+
+      // You can even delay the listener slightly just to be safe
+      setTimeout(() => {
+        channel.addMessageListener((message) => {
+          console.log("📩 Message received:", message);
+        });
+      }, 500); // 500ms delay before adding listener
+    } catch (error) {
       console.error("❌ Subscription failed:", error);
-    });
+    }
   </script>
 </body>
 </html>
