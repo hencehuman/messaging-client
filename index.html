@@ -1,33 +1,72 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>RT Messaging Bridge</title>
+  <title>WebBridge RT Messaging</title>
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
 </head>
 <body>
-  <h2>Listening for messages...</h2>
+  <h2>Messaging Bridge Active</h2>
 
   <script>
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only Messaging Key
-    const PUBLISHER_OBJECT_ID = "236E3176-6F40-BBB6-FF42-5D0E7E2F2300";
-    const CHANNEL_NAME = PUBLISHER_OBJECT_ID.substring(0, 6);
 
-    // Initialize
-    Backendless.initApp(APP_ID, API_KEY);
+    // Two separate keys
+    const API_KEY_RECEIVE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
+    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
-    // Subscribe
-    const channel = Backendless.Messaging.subscribe(CHANNEL_NAME);
-    channel.addMessageListener((message) => {
-      const msgText = typeof message === "object" ? JSON.stringify(message) : message;
+    // Determine mode from client input via postMessage
+    let mode = "listen"; // or "publish"
 
-      console.log("📩 Message received:", msgText);
+    // Wait for Thunkable to post setup config
+    window.addEventListener("message", async (event) => {
+      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
 
-      // 🔁 Send to Thunkable app (Web Bridge)
-      window.ReactNativeWebView?.postMessage(msgText);
+      if (!data || !data.mode || !data.channel) return;
+
+      mode = data.mode;
+      const channelName = data.channel;
+      const token = data.token || null;
+
+      if (mode === "listen") {
+        Backendless.initApp(APP_ID, API_KEY_RECEIVE);
+        if (token) Backendless.UserService.setCurrentUserToken(token);
+
+        const channel = Backendless.Messaging.subscribe(channelName);
+        channel.addMessageListener((message) => {
+          const msgText = typeof message === "object" ? JSON.stringify(message) : message;
+          window.ReactNativeWebView?.postMessage(msgText);
+        });
+
+        console.log("✅ Listening on channel:", channelName);
+      }
+
+      else if (mode === "publish") {
+        Backendless.initApp(APP_ID, API_KEY_PUBLISH);
+        if (token) Backendless.UserService.setCurrentUserToken(token);
+
+        const payload = {
+          message: data.message,
+          name: data.name,
+          listening: data.listening,
+          changing: data.changing,
+          language: data.language,
+          water: data.water,
+          word: data.word,
+          date: data.date,
+          time: data.time,
+          timestamp: new Date().toISOString()
+        };
+
+        try {
+          await Backendless.Messaging.publish(channelName, payload);
+          console.log("📤 Message published to", channelName);
+        } catch (error) {
+          console.error("❌ Failed to publish:", error.message);
+        }
+      }
     });
 
-    console.log("✅ Subscribed to channel:", CHANNEL_NAME);
+    console.log("📡 Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
 </html>
