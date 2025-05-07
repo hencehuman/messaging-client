@@ -1,72 +1,102 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebBridge RT Messaging</title>
+  <meta charset="UTF-8">
+  <title>Web Bridge RT Messaging</title>
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
 </head>
 <body>
   <h2>Messaging Bridge Active</h2>
 
   <script>
+    // Backendless configuration
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-
-    // Two separate keys
-    const API_KEY_RECEIVE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
+    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
     const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
-    // Determine mode from client input via postMessage
-    let mode = "listen"; // or "publish"
-
-    // Wait for Thunkable to post setup config
+    // Handle incoming messages from Thunkable
     window.addEventListener("message", async (event) => {
-      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-
-      if (!data || !data.mode || !data.channel) return;
-
-      mode = data.mode;
-      const channelName = data.channel;
-      const token = data.token || null;
-
-      if (mode === "listen") {
-        Backendless.initApp(APP_ID, API_KEY_RECEIVE);
-        if (token) Backendless.UserService.setCurrentUserToken(token);
-
-        const channel = Backendless.Messaging.subscribe(channelName);
-        channel.addMessageListener((message) => {
-          const msgText = typeof message === "object" ? JSON.stringify(message) : message;
-          window.ReactNativeWebView?.postMessage(msgText);
-        });
-
-        console.log("✅ Listening on channel:", channelName);
+      let data;
+      try {
+        // Parse event.data if string, otherwise use directly
+        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      } catch (e) {
+        console.error("❌ Invalid message format:", e.message);
+        return;
       }
 
-      else if (mode === "publish") {
-        Backendless.initApp(APP_ID, API_KEY_PUBLISH);
-        if (token) Backendless.UserService.setCurrentUserToken(token);
+      // Validate required fields
+      if (!data || !data.mode || !data.token) {
+        console.warn("❌ Missing required data: mode or token");
+        return;
+      }
 
+      const mode = data.mode;
+      const token = data.token;
+
+      if (mode === "listen") {
+        // Validate channelName for listen mode
+        const channelName = data.channelName;
+        if (!channelName) {
+          console.warn("❌ Missing channelName for listen mode");
+          return;
+        }
+
+        // Initialize Backendless for subscription
+        Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
+        Backendless.UserService.setCurrentUserToken(token);
+
+        try {
+          const channel = Backendless.Messaging.subscribe(channelName);
+          channel.addMessageListener((message) => {
+            // Ensure message is stringified for Thunkable WebView
+            const msgText = typeof message === "object" ? JSON.stringify(message) : message;
+            if (window.ReactNativeWebView?.postMessage) {
+              window.ReactNativeWebView.postMessage(msgText);
+            }
+          });
+          console.log("✅ Listening on channel:", channelName);
+        } catch (e) {
+          console.error("❌ Subscription error:", e.message);
+        }
+      } else if (mode === "publish") {
+        // Derive channel from token
+        let channelName;
+        try {
+          const parsedToken = JSON.parse(atob(token.split('.')[1]));
+          const objectId = parsedToken['objectId'] || parsedToken['user-id'];
+          if (!objectId) throw new Error("Invalid objectId in token");
+          channelName = objectId.substring(0, 6);
+        } catch (e) {
+          console.error("❌ Failed to derive channel from token:", e.message);
+          return;
+        }
+
+        // Initialize Backendless for publishing
+        Backendless.initApp(APP_ID, API_KEY_PUBLISH);
+        Backendless.UserService.setCurrentUserToken(token);
+
+        // Construct payload
         const payload = {
-          message: data.message,
-          name: data.name,
-          listening: data.listening,
-          changing: data.changing,
-          language: data.language,
-          water: data.water,
-          word: data.word,
-          date: data.date,
-          time: data.time,
+          latestOb: data.latestOb || null,
+          location: data.location || null,
           timestamp: new Date().toISOString()
         };
 
         try {
-          await Backendless.Messaging.publish(channelName, payload);
+          await Backendless.Messaging.publish(channelName, payload, {
+            headers: { "user-token": token }
+          });
           console.log("📤 Message published to", channelName);
-        } catch (error) {
-          console.error("❌ Failed to publish:", error.message);
+        } catch (e) {
+          console.error("❌ Failed to publish:", e.message);
         }
+      } else {
+        console.warn("❌ Invalid mode:", mode);
       }
     });
 
-    console.log("📡 Bridge ready to receive instructions from Thunkable...");
+    console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
 </html>
