@@ -2,154 +2,115 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Web Bridge RT Listening</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
-  <meta http-equiv="Access-Control-Allow-Origin" content="*">
+  <title>Web Bridge RT Messaging</title>
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
-  <style>
-    #output { display: none; }
-  </style>
 </head>
 <body>
-  <h2>Listening Bridge Active</h2>
-  <div id="output"></div>
+  <h2>Messaging Bridge Active</h2>
 
   <script>
     // Backendless configuration
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
+    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
+    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
-    // Diagnostic endpoints
-    window.testBridge = function() {
-      console.log("🛠️ Bridge test: Script loaded and functional");
-      return "BridgeReady";
-    };
-
-    window.testPostMessage = function(message) {
-      console.log("🛠️ Testing postMessage:", message);
-      try {
-        if (window.ReactNativeWebView?.postMessage) {
-          window.ReactNativeWebView.postMessage(message);
-        }
-        if (window.Android?.postMessage) {
-          window.Android.postMessage(message);
-        }
-        if (window.AndroidInterface?.postMessage) {
-          window.AndroidInterface.postMessage(message);
-        }
-        if (window.chrome?.webview?.postMessage) {
-          window.chrome.webview.postMessage(message);
-        }
-        if (window.webkit?.messageHandlers?.webview?.postMessage) {
-          window.webkit.messageHandlers.webview.postMessage(message);
-        }
-        if (window.webkit?.messageHandlers?.webViewHost?.postMessage) {
-          window.webkit.messageHandlers.webViewHost.postMessage(message);
-        }
-        window.postMessage(message, "*");
-        return "PostMessageSent";
-      } catch (e) {
-        console.error("❌ PostMessage test failed:", e.message);
-        return "PostMessageFailed: " + e.message;
-      }
-    };
-
-    // Process listen messages
-    window.processMessage = async function(message) {
-      console.log("📥 Processing message:", message);
+    // Handle incoming messages from Thunkable
+    function handleMessage(event) {
+      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source);
       let data;
       try {
-        if (typeof message === "string") {
-          data = message.trim() ? JSON.parse(message) : {};
-        } else if (typeof message === "object" && message !== null) {
-          data = message;
+        // Handle various data types
+        if (typeof event.data === "string") {
+          data = JSON.parse(event.data);
+        } else if (typeof event.data === "object" && event.data !== null) {
+          data = event.data;
         } else {
-          throw new Error("Unsupported message type");
+          throw new Error("Unsupported data type");
         }
         console.log("📦 Parsed message:", JSON.stringify(data));
       } catch (e) {
-        console.error("❌ Invalid message format:", e.message, "Raw:", message);
-        return { status: "error", message: e.message };
+        console.error("❌ Invalid message format:", e.message, "Raw data:", event.data);
+        return;
       }
 
-      if (!data || !data.mode || !data.token || !data.channelName) {
-        console.warn("❌ Missing required data: mode, token, or channelName", data);
-        return { status: "error", message: "Missing required data" };
+      // Validate required fields
+      if (!data || !data.mode || !data.token) {
+        console.warn("❌ Missing required data: mode or token", data);
+        return;
       }
 
-      if (data.mode !== "listen") {
-        console.warn("❌ Only listen mode supported", data.mode);
-        return { status: "error", message: `Invalid mode: ${data.mode}` };
-      }
-
+      const mode = data.mode;
       const token = data.token;
-      const channelName = data.channelName;
 
-      Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
-      Backendless.UserService.setCurrentUserToken(token);
+      if (mode === "listen") {
+        const channelName = data.channelName;
+        if (!channelName) {
+          console.warn("❌ Missing channelName for listen mode");
+          return;
+        }
 
-      try {
-        const channel = Backendless.Messaging.subscribe(channelName);
-        channel.addMessageListener((message) => {
-          const msgText = typeof message === "object" ? JSON.stringify(message) : message;
-          console.log("📤 Sending to WebView:", msgText);
-          try {
-            // PostMessage attempts
-            if (window.ReactNativeWebView?.postMessage) {
-              window.ReactNativeWebView.postMessage(msgText);
-              console.log("📤 Sent via ReactNativeWebView");
-            }
-            if (window.Android?.postMessage) {
-              window.Android.postMessage(msgText);
-              console.log("📤 Sent via Android");
-            }
-            if (window.AndroidInterface?.postMessage) {
-              window.AndroidInterface.postMessage(msgText);
-              console.log("📤 Sent via AndroidInterface");
-            }
-            if (window.chrome?.webview?.postMessage) {
-              window.chrome.webview.postMessage(msgText);
-              console.log("📤 Sent via chrome.webview");
-            }
-            if (window.webkit?.messageHandlers?.webview?.postMessage) {
-              window.webkit.messageHandlers.webview.postMessage(msgText);
-              console.log("📤 Sent via webkit.webview");
-            }
-            if (window.webkit?.messageHandlers?.webViewHost?.postMessage) {
-              window.webkit.messageHandlers.webViewHost.postMessage(msgText);
-              console.log("📤 Sent via webkit.webViewHost");
-            }
-            window.postMessage(msgText, "*");
-            console.log("📤 Sent via window");
+        Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
+        Backendless.UserService.setCurrentUserToken(token);
 
-            // DOM fallback
-            const outputDiv = document.getElementById("output");
-            outputDiv.textContent = msgText;
-            console.log("📤 Set DOM output");
+        try {
+          const channel = Backendless.Messaging.subscribe(channelName);
+          channel.addMessageListener((message) => {
+            const msgText = typeof message === "object" ? JSON.stringify(message) : message;
+            console.log("📤 Sending to WebView:", msgText);
+            try {
+              // Try multiple postMessage methods
+              if (window.ReactNativeWebView?.postMessage) {
+                window.ReactNativeWebView.postMessage(msgText);
+              }
+              window.parent.postMessage(msgText, "*");
+              window.postMessage(msgText, "*");
+            } catch (e) {
+              console.error("❌ Failed to post message to WebView:", e.message);
+            }
+          });
+          console.log("✅ Listening on channel:", channelName);
+        } catch (e) {
+          console.error("❌ Subscription error:", e.message);
+        }
+      } else if (mode === "publish") {
+        let channelName;
+        try {
+          const parsedToken = JSON.parse(atob(token.split('.')[1]));
+          console.log("🔍 Parsed token payload:", JSON.stringify(parsedToken));
+          const objectId = parsedToken['objectId'] || parsedToken['user-id'] || parsedToken['userId'] || parsedToken['id'] || parsedToken['sub'];
+          if (!objectId) throw new Error("No valid user identifier (objectId, user-id, userId, id, sub) in token");
+          channelName = objectId.substring(0, 6);
+          console.log("📌 Derived channelName:", channelName);
+        } catch (e) {
+          console.error("❌ Failed to derive channel from token:", e.message, "Token:", token);
+          return;
+        }
 
-            // Custom event
-            const event = new CustomEvent("bridgeMessage", { detail: msgText });
-            document.dispatchEvent(event);
-            console.log("📤 Dispatched bridgeMessage event");
-          } catch (e) {
-            console.error("❌ Failed to post message to WebView:", e.message);
-          }
-        });
-        console.log("✅ Listening on channel:", channelName);
-        return { status: "success", message: `Listening on ${channelName}` };
-      } catch (e) {
-        console.error("❌ Subscription error:", e.message);
-        return { status: "error", message: e.message };
+        Backendless.initApp(APP_ID, API_KEY_PUBLISH);
+        Backendless.UserService.setCurrentUserToken(token);
+
+        const payload = {
+          latestOb: data.latestOb || null,
+          location: data.location || null,
+          timestamp: new Date().toISOString()
+        };
+        console.log("📦 Publish payload:", JSON.stringify(payload));
+
+        try {
+          await Backendless.Messaging.publish(channelName, payload);
+          console.log("📤 Message published to", channelName);
+        } catch (e) {
+          console.error("❌ Failed to publish:", e.message, e);
+        }
+      } else {
+        console.warn("❌ Invalid mode:", mode);
       }
-    };
+    }
 
-    // Message listener
-    window.addEventListener("message", (event) => {
-      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
-      window.processMessage(event.data);
-    });
-
-    console.log("📡 Listening Bridge ready to receive instructions from Thunkable...");
+    // Attach multiple listeners for WebView compatibility
+    window.addEventListener("message", handleMessage);
+    window.parent.addEventListener("message", handleMessage);
+    console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
 </html>
