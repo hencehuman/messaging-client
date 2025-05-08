@@ -6,19 +6,52 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <meta http-equiv="Access-Control-Allow-Origin" content="*">
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
+  <style>
+    #output { display: none; }
+  </style>
 </head>
 <body>
   <h2>Listening Bridge Active</h2>
+  <div id="output"></div>
 
   <script>
     // Backendless configuration
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
     const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
 
-    // Diagnostic endpoint
+    // Diagnostic endpoints
     window.testBridge = function() {
       console.log("🛠️ Bridge test: Script loaded and functional");
       return "BridgeReady";
+    };
+
+    window.testPostMessage = function(message) {
+      console.log("🛠️ Testing postMessage:", message);
+      try {
+        if (window.ReactNativeWebView?.postMessage) {
+          window.ReactNativeWebView.postMessage(message);
+        }
+        if (window.Android?.postMessage) {
+          window.Android.postMessage(message);
+        }
+        if (window.AndroidInterface?.postMessage) {
+          window.AndroidInterface.postMessage(message);
+        }
+        if (window.chrome?.webview?.postMessage) {
+          window.chrome.webview.postMessage(message);
+        }
+        if (window.webkit?.messageHandlers?.webview?.postMessage) {
+          window.webkit.messageHandlers.webview.postMessage(message);
+        }
+        if (window.webkit?.messageHandlers?.webViewHost?.postMessage) {
+          window.webkit.messageHandlers.webViewHost.postMessage(message);
+        }
+        window.postMessage(message, "*");
+        return "PostMessageSent";
+      } catch (e) {
+        console.error("❌ PostMessage test failed:", e.message);
+        return "PostMessageFailed: " + e.message;
+      }
     };
 
     // Process listen messages
@@ -61,22 +94,43 @@
           const msgText = typeof message === "object" ? JSON.stringify(message) : message;
           console.log("📤 Sending to WebView:", msgText);
           try {
+            // PostMessage attempts
             if (window.ReactNativeWebView?.postMessage) {
               window.ReactNativeWebView.postMessage(msgText);
+              console.log("📤 Sent via ReactNativeWebView");
             }
             if (window.Android?.postMessage) {
               window.Android.postMessage(msgText);
+              console.log("📤 Sent via Android");
+            }
+            if (window.AndroidInterface?.postMessage) {
+              window.AndroidInterface.postMessage(msgText);
+              console.log("📤 Sent via AndroidInterface");
             }
             if (window.chrome?.webview?.postMessage) {
               window.chrome.webview.postMessage(msgText);
+              console.log("📤 Sent via chrome.webview");
             }
             if (window.webkit?.messageHandlers?.webview?.postMessage) {
               window.webkit.messageHandlers.webview.postMessage(msgText);
+              console.log("📤 Sent via webkit.webview");
+            }
+            if (window.webkit?.messageHandlers?.webViewHost?.postMessage) {
+              window.webkit.messageHandlers.webViewHost.postMessage(msgText);
+              console.log("📤 Sent via webkit.webViewHost");
             }
             window.postMessage(msgText, "*");
-            // Custom event fallback
+            console.log("📤 Sent via window");
+
+            // DOM fallback
+            const outputDiv = document.getElementById("output");
+            outputDiv.textContent = msgText;
+            console.log("📤 Set DOM output");
+
+            // Custom event
             const event = new CustomEvent("bridgeMessage", { detail: msgText });
             document.dispatchEvent(event);
+            console.log("📤 Dispatched bridgeMessage event");
           } catch (e) {
             console.error("❌ Failed to post message to WebView:", e.message);
           }
@@ -89,7 +143,7 @@
       }
     };
 
-    // Single message listener
+    // Message listener
     window.addEventListener("message", (event) => {
       console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
       window.processMessage(event.data);
