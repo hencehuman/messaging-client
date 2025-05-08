@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Web Bridge RT Messaging</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline';">
+  <meta http-equiv="Access-Control-Allow-Origin" content="*">
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
 </head>
 <body>
@@ -16,12 +18,14 @@
 
     // Handle incoming messages from Thunkable
     async function handleMessage(event) {
-      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source);
+      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
       let data;
       try {
-        // Handle various data types
+        if (event.data === null || event.data === undefined) {
+          throw new Error("Empty or undefined message data");
+        }
         if (typeof event.data === "string") {
-          data = JSON.parse(event.data);
+          data = event.data.trim() ? JSON.parse(event.data) : {};
         } else if (typeof event.data === "object" && event.data !== null) {
           data = event.data;
         } else {
@@ -33,7 +37,6 @@
         return;
       }
 
-      // Validate required fields
       if (!data || !data.mode || !data.token) {
         console.warn("❌ Missing required data: mode or token", data);
         return;
@@ -58,9 +61,15 @@
             const msgText = typeof message === "object" ? JSON.stringify(message) : message;
             console.log("📤 Sending to WebView:", msgText);
             try {
-              // Try multiple postMessage methods
+              // Multiple postMessage targets for compatibility
               if (window.ReactNativeWebView?.postMessage) {
                 window.ReactNativeWebView.postMessage(msgText);
+              }
+              if (window.Android?.postMessage) {
+                window.Android.postMessage(msgText);
+              }
+              if (window.webkit?.messageHandlers?.webview) {
+                window.webkit.messageHandlers.webview.postMessage(msgText);
               }
               window.parent.postMessage(msgText, "*");
               window.postMessage(msgText, "*");
@@ -110,6 +119,9 @@
     // Attach multiple listeners for WebView compatibility
     window.addEventListener("message", handleMessage);
     window.parent.addEventListener("message", handleMessage);
+    window.top.addEventListener("message", handleMessage);
+    // Global onmessage fallback
+    window.onmessage = handleMessage;
     console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
