@@ -3,50 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <title>Web Bridge RT Messaging</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
-  <meta http-equiv="Access-Control-Allow-Origin" content="*">
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
-  <style>
-    #output { display: none; }
-  </style>
 </head>
 <body>
   <h2>Messaging Bridge Active</h2>
-  <div id="output"></div>
 
   <script>
     // Backendless configuration
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
-    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C";
+    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
+    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
-    // Diagnostic endpoint
-    window.testBridge = function() {
-      console.log("🛠️ Bridge test: Script loaded and functional");
-      return "BridgeReady";
-    };
-
-    // Process messages
-    window.processMessage = async function(message) {
-      console.log("📥 Processing message:", message);
+    // Handle incoming messages from Thunkable
+    function handleMessage(event) {
+      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source);
       let data;
       try {
-        if (typeof message === "string") {
-          data = message.trim() ? JSON.parse(message) : {};
-        } else if (typeof message === "object" && message !== null) {
-          data = message;
+        // Handle various data types
+        if (typeof event.data === "string") {
+          data = JSON.parse(event.data);
+        } else if (typeof event.data === "object" && event.data !== null) {
+          data = event.data;
         } else {
-          throw new Error("Unsupported message type");
+          throw new Error("Unsupported data type");
         }
         console.log("📦 Parsed message:", JSON.stringify(data));
       } catch (e) {
-        console.error("❌ Invalid message format:", e.message, "Raw:", message);
-        return { status: "error", message: e.message };
+        console.error("❌ Invalid message format:", e.message, "Raw data:", event.data);
+        return;
       }
 
+      // Validate required fields
       if (!data || !data.mode || !data.token) {
         console.warn("❌ Missing required data: mode or token", data);
-        return { status: "error", message: "Missing mode or token" };
+        return;
       }
 
       const mode = data.mode;
@@ -56,7 +46,7 @@
         const channelName = data.channelName;
         if (!channelName) {
           console.warn("❌ Missing channelName for listen mode");
-          return { status: "error", message: "Missing channelName" };
+          return;
         }
 
         Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
@@ -68,11 +58,9 @@
             const msgText = typeof message === "object" ? JSON.stringify(message) : message;
             console.log("📤 Sending to WebView:", msgText);
             try {
+              // Try multiple postMessage methods
               if (window.ReactNativeWebView?.postMessage) {
                 window.ReactNativeWebView.postMessage(msgText);
-              }
-              if (window.Android?.postMessage) {
-                window.Android.postMessage(msgText);
               }
               window.parent.postMessage(msgText, "*");
               window.postMessage(msgText, "*");
@@ -81,10 +69,8 @@
             }
           });
           console.log("✅ Listening on channel:", channelName);
-          return { status: "success", message: `Listening on ${channelName}` };
         } catch (e) {
           console.error("❌ Subscription error:", e.message);
-          return { status: "error", message: e.message };
         }
       } else if (mode === "publish") {
         let channelName;
@@ -92,12 +78,12 @@
           const parsedToken = JSON.parse(atob(token.split('.')[1]));
           console.log("🔍 Parsed token payload:", JSON.stringify(parsedToken));
           const objectId = parsedToken['objectId'] || parsedToken['user-id'] || parsedToken['userId'] || parsedToken['id'] || parsedToken['sub'];
-          if (!objectId) throw new Error("No valid user identifier");
+          if (!objectId) throw new Error("No valid user identifier (objectId, user-id, userId, id, sub) in token");
           channelName = objectId.substring(0, 6);
           console.log("📌 Derived channelName:", channelName);
         } catch (e) {
-          console.error("❌ Failed to derive channel:", e.message);
-          return { status: "error", message: e.message };
+          console.error("❌ Failed to derive channel from token:", e.message, "Token:", token);
+          return;
         }
 
         Backendless.initApp(APP_ID, API_KEY_PUBLISH);
@@ -113,23 +99,17 @@
         try {
           await Backendless.Messaging.publish(channelName, payload);
           console.log("📤 Message published to", channelName);
-          return { status: "success", message: `Published to ${channelName}` };
         } catch (e) {
-          console.error("❌ Failed to publish:", e.message);
-          return { status: "error", message: e.message };
+          console.error("❌ Failed to publish:", e.message, e);
         }
       } else {
         console.warn("❌ Invalid mode:", mode);
-        return { status: "error", message: `Invalid mode: ${mode}` };
       }
-    };
+    }
 
-    // Message listener
-    window.addEventListener("message", (event) => {
-      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
-      window.processMessage(event.data);
-    });
-
+    // Attach multiple listeners for WebView compatibility
+    window.addEventListener("message", handleMessage);
+    window.parent.addEventListener("message", handleMessage);
     console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
