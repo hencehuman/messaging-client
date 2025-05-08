@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test WebView</title>
+</head>
+<body>
+  <h2>Test Page</h2>
+  <script>
+    window.test = function() {
+      console.log("🛠️ Test called");
+      window.ReactNativeWebView?.postMessage("TestReady");
+    };
+    window.sendTest = function(msg) {
+      console.log("📤 Sending:", msg);
+      window.ReactNativeWebView?.postMessage(msg);
+    };
+  </script>
+</body>
+</html>
