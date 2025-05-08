@@ -2,9 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Web Bridge RT Listening</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
-  <meta http-equiv="Access-Control-Allow-Origin" content="*">
+  <title>Web Bridge Listener</title>
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
 </head>
 <body>
@@ -12,72 +10,52 @@
 
   <script>
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
+    const API_KEY = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
 
-    window.testBridge = function() {
-      console.log("🛠️ Bridge test: Script loaded and functional");
-      return "BridgeReady";
-    };
-
-    window.processMessage = async function(message) {
-      console.log("📥 Processing message:", message);
+    // Start listening on command from Thunkable
+    window.addEventListener("message", async (event) => {
+      console.log("📩 Received message:", event.data);
       let data;
+
       try {
-        if (typeof message === "string") {
-          data = message.trim() ? JSON.parse(message) : {};
-        } else if (typeof message === "object" && message !== null) {
-          data = message;
-        } else {
-          throw new Error("Unsupported message type");
-        }
-        console.log("📦 Parsed message:", JSON.stringify(data));
+        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
       } catch (e) {
-        console.error("❌ Invalid message format:", e.message, "Raw:", message);
-        return { status: "error", message: e.message };
-      }
-
-      if (!data || !data.mode || !data.token || !data.channelName) {
-        console.warn("❌ Missing required data: mode, token, or channelName", data);
-        return { status: "error", message: "Missing required data" };
-      }
-
-      if (data.mode !== "listen") {
-        console.warn("❌ Only listen mode supported", data.mode);
-        return { status: "error", message: `Invalid mode: ${data.mode}` };
+        console.error("❌ Failed to parse JSON:", e.message);
+        return;
       }
 
       const token = data.token;
       const channelName = data.channelName;
 
-      Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
+      if (!token || !channelName) {
+        console.warn("❌ Missing token or channelName");
+        return;
+      }
+
+      Backendless.initApp(APP_ID, API_KEY);
       Backendless.UserService.setCurrentUserToken(token);
 
       try {
         const channel = Backendless.Messaging.subscribe(channelName);
         channel.addMessageListener((message) => {
-          const msgText = typeof message === "object" ? JSON.stringify(message) : String(message);
-          console.log("📤 Sending to WebView:", msgText);
-          try {
-            // ✅ Reliable for both iOS and Android in Thunkable WebViewer
-            window.ReactNativeWebView?.postMessage(msgText);
-          } catch (e) {
-            console.error("❌ postMessage failed:", e.message);
+          const msg = typeof message === "object" ? JSON.stringify(message) : String(message);
+          console.log("📤 Forwarding to WebView:", msg);
+
+          // ✅ Standard cross-platform WebViewer call
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(msg);
+          } else {
+            console.warn("⚠️ ReactNativeWebView.postMessage not available");
           }
         });
-        console.log("✅ Listening on channel:", channelName);
-        return { status: "success", message: `Listening on ${channelName}` };
+
+        console.log("✅ Subscribed to:", channelName);
       } catch (e) {
         console.error("❌ Subscription error:", e.message);
-        return { status: "error", message: e.message };
       }
-    };
-
-    window.addEventListener("message", (event) => {
-      console.log("📥 Raw message received:", event.data, "Origin:", event.origin);
-      window.processMessage(event.data);
     });
 
-    console.log("📡 Listening Bridge ready to receive instructions from Thunkable...");
+    console.log("📡 WebBridge ready");
   </script>
 </body>
 </html>
