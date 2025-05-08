@@ -13,27 +13,25 @@
   <script>
     // Backendless configuration
     const APP_ID = "9561383D-4BC2-F4F1-FF73-B529BFE77000";
-    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6"; // Read-only key
-    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
+    const API_KEY_SUBSCRIBE = "BEE4A193-7ADC-419B-9EB4-202FDA99ACC6";
+    const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C";
 
-    // Handle incoming messages from Thunkable
-    async function handleMessage(event) {
-      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
-      let data;
+    // Expose handleMessage globally for evaluateJavascript
+    window.handleMessage = async function(event) {
+      let data = event.data || event; // Handle direct calls from evaluateJavascript
+      console.log("📥 Raw message received:", data, "Origin:", event.origin || "direct", "Source:", event.source || "none");
       try {
-        if (event.data === null || event.data === undefined) {
+        if (data === null || data === undefined) {
           throw new Error("Empty or undefined message data");
         }
-        if (typeof event.data === "string") {
-          data = event.data.trim() ? JSON.parse(event.data) : {};
-        } else if (typeof event.data === "object" && event.data !== null) {
-          data = event.data;
-        } else {
+        if (typeof data === "string") {
+          data = data.trim() ? JSON.parse(data) : {};
+        } else if (typeof data !== "object" || data === null) {
           throw new Error("Unsupported data type");
         }
         console.log("📦 Parsed message:", JSON.stringify(data));
       } catch (e) {
-        console.error("❌ Invalid message format:", e.message, "Raw data:", event.data);
+        console.error("❌ Invalid message format:", e.message, "Raw data:", data);
         return;
       }
 
@@ -61,7 +59,7 @@
             const msgText = typeof message === "object" ? JSON.stringify(message) : message;
             console.log("📤 Sending to WebView:", msgText);
             try {
-              // Multiple postMessage targets for compatibility
+              // Multiple postMessage targets
               if (window.ReactNativeWebView?.postMessage) {
                 window.ReactNativeWebView.postMessage(msgText);
               }
@@ -71,8 +69,14 @@
               if (window.webkit?.messageHandlers?.webview) {
                 window.webkit.messageHandlers.webview.postMessage(msgText);
               }
+              if (window.chrome?.webview) {
+                window.chrome.webview.postMessage(msgText);
+              }
               window.parent.postMessage(msgText, "*");
               window.postMessage(msgText, "*");
+              // Custom event fallback
+              const event = new CustomEvent("message", { detail: msgText });
+              document.dispatchEvent(event);
             } catch (e) {
               console.error("❌ Failed to post message to WebView:", e.message);
             }
@@ -114,14 +118,19 @@
       } else {
         console.warn("❌ Invalid mode:", mode);
       }
-    }
+    };
 
-    // Attach multiple listeners for WebView compatibility
-    window.addEventListener("message", handleMessage);
-    window.parent.addEventListener("message", handleMessage);
-    window.top.addEventListener("message", handleMessage);
-    // Global onmessage fallback
-    window.onmessage = handleMessage;
+    // Attach multiple listeners
+    window.addEventListener("message", window.handleMessage);
+    window.parent.addEventListener("message", window.handleMessage);
+    window.top.addEventListener("message", window.handleMessage);
+    window.onmessage = window.handleMessage;
+    // Custom event listener for Android
+    document.addEventListener("message", (event) => {
+      console.log("📥 Custom event received:", event.detail);
+      window.handleMessage({ data: event.detail, origin: "custom", source: "document" });
+    });
+
     console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
