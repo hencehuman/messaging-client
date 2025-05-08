@@ -18,16 +18,19 @@
     window.addEventListener("message", async (event) => {
       let data;
       try {
-        // Parse event.data if string, otherwise use directly
+        // Log raw event data for debugging
+        console.log("📥 Raw message received:", event.data);
+        // Force string parsing to handle WebView quirks
         data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        console.log("📦 Parsed message:", JSON.stringify(data));
       } catch (e) {
-        console.error("❌ Invalid message format:", e.message);
+        console.error("❌ Invalid message format:", e.message, "Raw data:", event.data);
         return;
       }
 
       // Validate required fields
       if (!data || !data.mode || !data.token) {
-        console.warn("❌ Missing required data: mode or token");
+        console.warn("❌ Missing required data: mode or token", data);
         return;
       }
 
@@ -64,11 +67,13 @@
         let channelName;
         try {
           const parsedToken = JSON.parse(atob(token.split('.')[1]));
-          const objectId = parsedToken['objectId'] || parsedToken['user-id'];
-          if (!objectId) throw new Error("Invalid objectId in token");
+          console.log("🔍 Parsed token payload:", JSON.stringify(parsedToken));
+          const objectId = parsedToken['objectId'] || parsedToken['user-id'] || parsedToken['userId'] || parsedToken['id'] || parsedToken['sub'];
+          if (!objectId) throw new Error("No valid user identifier (objectId, user-id, userId, id, sub) in token");
           channelName = objectId.substring(0, 6);
+          console.log("📌 Derived channelName:", channelName);
         } catch (e) {
-          console.error("❌ Failed to derive channel from token:", e.message);
+          console.error("❌ Failed to derive channel from token:", e.message, "Token:", token);
           return;
         }
 
@@ -82,14 +87,14 @@
           location: data.location || null,
           timestamp: new Date().toISOString()
         };
+        console.log("📦 Publish payload:", JSON.stringify(payload));
 
         try {
-          await Backendless.Messaging.publish(channelName, payload, {
-            headers: { "user-token": token }
-          });
+          // Simplified publish to match test publisher, no user-token headers for testing
+          await Backendless.Messaging.publish(channelName, payload);
           console.log("📤 Message published to", channelName);
         } catch (e) {
-          console.error("❌ Failed to publish:", e.message);
+          console.error("❌ Failed to publish:", e.message, e);
         }
       } else {
         console.warn("❌ Invalid mode:", mode);
