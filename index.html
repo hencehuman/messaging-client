@@ -15,13 +15,18 @@
     const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
     // Handle incoming messages from Thunkable
-    window.addEventListener("message", async (event) => {
+    function handleMessage(event) {
+      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source);
       let data;
       try {
-        // Log raw event data for debugging
-        console.log("📥 Raw message received:", event.data);
-        // Force string parsing to handle WebView quirks
-        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        // Handle various data types
+        if (typeof event.data === "string") {
+          data = JSON.parse(event.data);
+        } else if (typeof event.data === "object" && event.data !== null) {
+          data = event.data;
+        } else {
+          throw new Error("Unsupported data type");
+        }
         console.log("📦 Parsed message:", JSON.stringify(data));
       } catch (e) {
         console.error("❌ Invalid message format:", e.message, "Raw data:", event.data);
@@ -38,24 +43,29 @@
       const token = data.token;
 
       if (mode === "listen") {
-        // Validate channelName for listen mode
         const channelName = data.channelName;
         if (!channelName) {
           console.warn("❌ Missing channelName for listen mode");
           return;
         }
 
-        // Initialize Backendless for subscription
         Backendless.initApp(APP_ID, API_KEY_SUBSCRIBE);
         Backendless.UserService.setCurrentUserToken(token);
 
         try {
           const channel = Backendless.Messaging.subscribe(channelName);
           channel.addMessageListener((message) => {
-            // Ensure message is stringified for Thunkable WebView
             const msgText = typeof message === "object" ? JSON.stringify(message) : message;
-            if (window.ReactNativeWebView?.postMessage) {
-              window.ReactNativeWebView.postMessage(msgText);
+            console.log("📤 Sending to WebView:", msgText);
+            try {
+              // Try multiple postMessage methods
+              if (window.ReactNativeWebView?.postMessage) {
+                window.ReactNativeWebView.postMessage(msgText);
+              }
+              window.parent.postMessage(msgText, "*");
+              window.postMessage(msgText, "*");
+            } catch (e) {
+              console.error("❌ Failed to post message to WebView:", e.message);
             }
           });
           console.log("✅ Listening on channel:", channelName);
@@ -63,7 +73,6 @@
           console.error("❌ Subscription error:", e.message);
         }
       } else if (mode === "publish") {
-        // Derive channel from token
         let channelName;
         try {
           const parsedToken = JSON.parse(atob(token.split('.')[1]));
@@ -77,11 +86,9 @@
           return;
         }
 
-        // Initialize Backendless for publishing
         Backendless.initApp(APP_ID, API_KEY_PUBLISH);
         Backendless.UserService.setCurrentUserToken(token);
 
-        // Construct payload
         const payload = {
           latestOb: data.latestOb || null,
           location: data.location || null,
@@ -90,7 +97,6 @@
         console.log("📦 Publish payload:", JSON.stringify(payload));
 
         try {
-          // Simplified publish to match test publisher, no user-token headers for testing
           await Backendless.Messaging.publish(channelName, payload);
           console.log("📤 Message published to", channelName);
         } catch (e) {
@@ -99,8 +105,11 @@
       } else {
         console.warn("❌ Invalid mode:", mode);
       }
-    });
+    }
 
+    // Attach multiple listeners for WebView compatibility
+    window.addEventListener("message", handleMessage);
+    window.parent.addEventListener("message", handleMessage);
     console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
 </body>
