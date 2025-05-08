@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <title>Web Bridge RT Messaging</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.jsdelivr.net; connect-src *; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <meta http-equiv="Access-Control-Allow-Origin" content="*">
   <script src="https://cdn.jsdelivr.net/npm/backendless@7/dist/backendless.min.js"></script>
+  <style>
+    #output { display: none; }
+  </style>
 </head>
 <body>
   <h2>Messaging Bridge Active</h2>
-  <div id="output" style="display:none;"></div>
+  <div id="output"></div>
 
   <script>
     // Backendless configuration
@@ -63,16 +66,18 @@
           const channel = Backendless.Messaging.subscribe(channelName);
           channel.addMessageListener((message) => {
             const msgText = typeof message === "object" ? JSON.stringify(message) : message;
-            console.log("📤 Outputting to DOM:", msgText);
+            console.log("📤 Sending to WebView:", msgText);
             try {
-              // Write to DOM for Thunkable to read
-              const outputDiv = document.getElementById("output");
-              outputDiv.textContent = msgText;
-              // Trigger custom event
-              const event = new CustomEvent("bridgeMessage", { detail: msgText });
-              document.dispatchEvent(event);
+              if (window.ReactNativeWebView?.postMessage) {
+                window.ReactNativeWebView.postMessage(msgText);
+              }
+              if (window.Android?.postMessage) {
+                window.Android.postMessage(msgText);
+              }
+              window.parent.postMessage(msgText, "*");
+              window.postMessage(msgText, "*");
             } catch (e) {
-              console.error("❌ Failed to output message:", e.message);
+              console.error("❌ Failed to post message to WebView:", e.message);
             }
           });
           console.log("✅ Listening on channel:", channelName);
@@ -118,6 +123,12 @@
         return { status: "error", message: `Invalid mode: ${mode}` };
       }
     };
+
+    // Message listener
+    window.addEventListener("message", (event) => {
+      console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source || "none");
+      window.processMessage(event.data);
+    });
 
     console.log("📡 Web Bridge ready to receive instructions from Thunkable...");
   </script>
