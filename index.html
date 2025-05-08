@@ -15,7 +15,7 @@
     const API_KEY_PUBLISH = "4CD13851-2D6E-44B6-BB66-5437FCBF0B8C"; // Publish key
 
     // Handle incoming messages from Thunkable
-    function handleMessage(event) {
+    async function handleMessage(event) {
       console.log("📥 Raw message received:", event.data, "Origin:", event.origin, "Source:", event.source);
       let data;
       try {
